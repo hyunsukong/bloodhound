@@ -1,0 +1,43 @@
+################################################################################################
+### Parameter file for Bloodhound ###
+################################################################################################
+
+### Input parameters ###
+
+
+## Simulation parameters ##
+
+# Planck 2016 parameters
+h = 0.6751
+H0_kpc = 0.1*h # km/s/kpc
+
+# Gravitational constant
+G = 4.30091*1e-6 # (km/s)^2 * kpc/Msolar
+
+# Mass of simulation particles
+part_mass = 1.9693723*1e-06*1e10/h # M_solar
+
+
+## Directory/file paths ##
+
+
+
+## Bloodhound code parameters ##
+
+# Fraction of most bound particles at infall to use to compute COM.
+most_bound_frac = 0.02
+# Minumum number of most bound particles at infall to use to compute COM.
+most_bound_min = 50
+
+# Disruption criteria
+cv_rapid_drop_frac = 0.3
+cv_infall_frac = 0.2
+cv_stays_low_frac = 0.4
+
+# 
+
+
+### Output parameters ###
+
+
+## Directory/file paths ##
