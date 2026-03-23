@@ -1,0 +1,53 @@
+#!/bin/bash
+#----------------------------------------------------
+# Sample Slurm job script
+#   for TACC Stampede3 SKX nodes
+#
+#   *** Serial Job in SKX Queue ***
+# 
+# Last revised: 23 April 2024
+#
+# Notes:
+#
+#   -- Copy/edit this script as desired.  Launch by executing
+#      "sbatch skx.serial.slurm" on a Stampede3 login node.
+#
+#   -- Serial codes run on a single node (upper case N = 1).
+#        A serial code ignores the value of lower case n,
+#        but slurm needs a plausible value to schedule the job.
+#
+#   -- For a good way to run multiple serial executables at the
+#        same time, execute "module load launcher" followed
+#        by "module help launcher".
+#
+#----------------------------------------------------
+
+#SBATCH -J run_bloodhound_subhalo_tracking_FIRE          # Job name
+#SBATCH -o ../../bloodhound_jobs/job_result.o%j       # Name of stdout output file - for bloodhound.py, output statements will be printed in a separate file!
+#SBATCH -e ../../bloodhound_jobs/bloodhound_error.e%j       # Name of stderr error file
+#SBATCH -p skx             # Queue (partition) name
+#SBATCH -N 1               # Total # of nodes (must be 1 for serial)
+#SBATCH -n 1               # Total # of mpi tasks (should be 1 for serial)
+#SBATCH -t 12:00:00        # Run time (hh:mm:ss)
+#SBATCH --mail-user=hyunsukong@utexas.edu
+#SBATCH --mail-type=all    # Send email at begin and end of job
+#SBATCH -A TG-PHY240063       # Allocation name (req'd if you have more than 1)
+
+# Other commands must follow all #SBATCH directives...
+
+module list
+pwd
+date
+
+# Either one of the below, source .../etc/profile.d/conda.sh or eval "$()", initializes conda in the shell.
+source /scratch/projects/compilers/intel24.0/oneapi/intelpython/python3.9/etc/profile.d/conda.sh
+#eval "$(conda shell.bash hook)"
+
+conda activate my_env
+module list
+
+# Launch serial code...
+
+python ../bloodhound.py         # Do not use ibrun or any other MPI launcher
+
+# ---------------------------------------------------
