@@ -3,54 +3,42 @@
 ### Created by Hyunsu Kong ###
 ################################################################################################
 #
-## Simulation name ##
-# Phat ELVIS, FIRE etc.
-# simulation_name = pELVIS
-simulation_name = FIRE
-#
 ## Constants ##
-# Use parameters used for the simulation
-# Phat ELVIS: Planck 2016 parameters, h = 0.6751, omega_l=0.6879, omega_m=0.3121, temp_cmb = 2.725 # Kelvin
-# FIRE II: Planck 2014 parameters, h=0.702, omega_l=0.728, omega_m=0.272
-h = 0.702
-omega_l=0.728
-omega_m=0.272
+#
+# Planck 2016 parameters 
+h = 0.6751
+omega_l=0.6879
+omega_m=0.3121
 temp_cmb = 2.725 # Kelvin
 #
 # Gravitational constant 
 G = 4.30091e-6 # (km/s)^2 * kpc/Msolar
 #
 # Mass of simulation particles
-part_mass = 24697.1 # 1.9693723*1e-06*1e10/h, M_solar
+part_mass = 29171.56421270923 # 1.9693723*1e-06*1e10/h, M_solar
+#
 #
 ## Directory/file paths/simulation numbers ##
-base_dir = '/scratch/05097/hk9457/FIREII/m12c_r7100'
-snapnum_info_fname = f'{base_dir}/snapshot_times.txt'
-out_statement_dir = f'{base_dir}/bloodhound_subhalo_tracking/bloodhound_jobs'
+base_dir = '/scratch/05097/hk9457/pELVIS/z13'
+snapnum_info_fname = f'{base_dir}/snapshot_header.txt'
+out_statement_dir = f'{base_dir}/bloodhound_subhalo_tracking/BH_test'
 bloodhound_out_statement_fname_base = "bloodhound_result"
 infall_criteria_out_statement_fname_base = "infall_criteria_result"
-infall_subtree_out_dir = f'{base_dir}/bloodhound_subhalo_tracking/infalling_subhalo_result'
-infall_subtree_out_fname_base = "infall_subhalo"
-tracked_halo_particle_dir = f'{base_dir}/bloodhound_subhalo_tracking/tracked_halo_particles'
+infall_subtree_out_dir = f'{base_dir}/bloodhound_subhalo_tracking/infalling_subtree_result/vinfall_4_5_to_10'
+infall_subtree_out_fname_base = "infall_subtrees"
+tracked_halo_particle_dir = f'{base_dir}/bloodhound_subhalo_tracking/tracked_halo_particles/vinfall_4_5_to_10'
 #
 # Whether infalling subhalos have already been identified or not. If not, do this step first.
 subhalo_selection_done = 1 # 0: false, 1: true
 #
 # Whether halo particle tracking for identified infalling subhalos have already been done or not.
 # If it's already been done, move on to the subhalo analysis step.
-halo_particle_tracking_done = 0 # 0: false, 1:true
+halo_particle_tracking_done = 1 # 0: false, 1:true
 #
 # Simulation numbers/names
 #sim_nums = [493, 539, 609, 694, 833, 848, 879, 988, 1107, 1245, 1386]
-#sim_nums = [493]
-sim_nums = [m12c_r7100]
-last_snapnum = 600
-#
-# Number of simulation output blocks per snapshot.
-num_output_files = 8
-#
-# Number of rockstar files per snapshot.
-num_rockstar_files = 16
+sim_nums = [493]
+last_snapnum = 152
 #
 # Whether the same halos need to be tracked in multiple simulations.
 # Example: Phat ELVIS has Disk simulations that are identical to their DMO counterparts.
@@ -60,11 +48,11 @@ tracking_order = [disk, dmo]
 # Does the snapshot particle ID argsort file exist?
 # It takes a long time to make these files, but having them reduces the tracking time considerably!
 # 1 second per halo to 0 second per halo.
-pID_argsort_made = 0 # 0: false, 1: true
+pID_argsort_made = 1 # 0: false, 1: true
 #
 ## Subhalo selection criteria parameters ##
 #
-# Simulation type (DMO/Disk) from which infalling subhalos are identified, if Phat ELVIS.
+# Simulation type (DMO/Disk) from which infalling subhalos are identified.
 run_type = 'disk'
 #
 # Whether to use actually infalling subhalos only for tracking or to include broken-link tree subhalos.
@@ -76,7 +64,7 @@ first_infall_z_low = 0.05
 #
 # Minimum V_infall to use.
 min_vinfall = 4.5
-max_vinfall = 70.
+max_vinfall = 10.
 #
 ################################################################################################
 # This part is specific only to the Phat ELVIS project and how its halo catalog and merger tree
@@ -87,7 +75,7 @@ max_vinfall = 70.
 # the initial set needs to be matched to the data from the new set.
 #
 # Whether there are two sets of Rockstar results. This should be 0 in most cases!
-two_rockstars = 0 # 0: false, 1: true
+two_rockstars = 1 # 0: false, 1: true
 #
 # COM (pMpc) and Vmax (relative difference) range to use for matching halos.
 com_range = 0.001

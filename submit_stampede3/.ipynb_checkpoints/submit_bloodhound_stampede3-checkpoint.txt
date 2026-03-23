@@ -25,11 +25,11 @@
 #SBATCH -J run_bloodhound_subhalo_tracking_FIRE          # Job name
 #SBATCH -o ../../bloodhound_jobs/job_result.o%j       # Name of stdout output file - for bloodhound.py, output statements will be printed in a separate file!
 #SBATCH -e ../../bloodhound_jobs/bloodhound_error.e%j       # Name of stderr error file
-#SBATCH -p skx             # Queue (partition) name
+#SBATCH -p spr             # Queue (partition) name
 #SBATCH -N 1               # Total # of nodes (must be 1 for serial)
 #SBATCH -n 1               # Total # of mpi tasks (should be 1 for serial)
-#SBATCH -t 12:00:00        # Run time (hh:mm:ss)
-#SBATCH --mail-user=hyunsukong@utexas.edu
+#SBATCH -t 12:01:00        # Run time (hh:mm:ss)
+#SBATCH --mail-user=kongh@rpi.edu
 #SBATCH --mail-type=all    # Send email at begin and end of job
 #SBATCH -A TG-PHY240063       # Allocation name (req'd if you have more than 1)
 
@@ -40,7 +40,8 @@ pwd
 date
 
 # Either one of the below, source .../etc/profile.d/conda.sh or eval "$()", initializes conda in the shell.
-source /scratch/projects/compilers/intel24.0/oneapi/intelpython/python3.9/etc/profile.d/conda.sh
+#source /scratch/projects/compilers/intel24.0/oneapi/intelpython/python3.9/etc/profile.d/conda.sh
+source /work2/05097/hk9457/stampede3/miniforge3/etc/profile.d/conda.sh
 #eval "$(conda shell.bash hook)"
 
 conda activate my_env

@@ -20,6 +20,7 @@ GIZMO:
   - Halo dark matter/collisionless particles: type=1
   - Disk collisionless particles: type=2
   - Bulge collisionless particles: type=3
+    -- 2,3 = 'dummy' collisionless particles (e.g. low-res dark-matter particles in cosmological runs; pre-existing "disk" and "bulge" star particles in the non-cosmological runs, dust grains or cosmic ray particles in simulations with explicit grain dynamics or MHD-PIC simulations)
   - Stars stars spawned from gas: type=4
   - Bndry black holes (if active), or collisionless: type=5
   *** From the GIZMO documentation:
@@ -91,6 +92,10 @@ class SnapshotData_FIRE(dict):
                     particle_IDs = snap_dat['PartType1/ParticleIDs'][:]
                     coordinates = snap_dat['PartType1/Coordinates'][:]
                     velocities = snap_dat['PartType1/Velocities'][:]
+                    if 'PartType2' in list(snap_dat.keys()):
+                        particle_IDs = np.concatenate((particle_IDs, snap_dat['PartType2/ParticleIDs'][:]))
+                        coordinates = np.concatenate((coordinates, snap_dat['PartType2/Coordinates'][:]))
+                        velocities = np.concatenate((velocities, snap_dat['PartType2/Velocities'][:]))
                     #
                     # Append the data to the final array.
                     if i == 0:
@@ -107,16 +112,19 @@ class SnapshotData_FIRE(dict):
         self["Velocities"] = vel_arr
         #self["ID.particle"] = pID_arr
         if not use_argsort:
+            # Sort the particle ID array and store the indices that would sort it.
+            self['pID.sort_idx'] = np.argsort(pID_arr)
             self["ID.particle"] = pID_arr
+        # Store the smallest particle ID value
+        self['ID.particle.min'] = np.min(pID_arr)
     #
     def print_header(self, out_f):
         fname = self['file.path'][0]
         with h5py.File(fname, 'r') as snap_dat:
             print(f"  * Groups: {list(snap_dat.keys())}", flush=True, file=out_f)
+            print(f"  * Members of 'PartType0': {list(snap_dat['PartType0'].keys())}", flush=True, file=out_f)
             print(f"  * Members of 'PartType1': {list(snap_dat['PartType1'].keys())}", flush=True, file=out_f)
-            print(f"  * Members of 'PartType2': {list(snap_dat['PartType2'].keys())}", flush=True, file=out_f)
             print(f"  * Metadata dictionary: {dict(snap_dat['Header'].attrs.items())}", flush=True, file=out_f)
-#
 class SnapshotData(dict):
     '''
     * A dictionary-class for handling snapshot data
@@ -216,8 +224,8 @@ class SnapshotData(dict):
         fname = self['file.path'][0]
         with h5py.File(fname, 'r') as snap_dat:
             print(f"  * Groups: {list(snap_dat.keys())}", flush=True, file=out_f)
+            print(f"  * Members of 'PartType0': {list(snap_dat['PartType0'].keys())}", flush=True, file=out_f)
             print(f"  * Members of 'PartType1': {list(snap_dat['PartType1'].keys())}", flush=True, file=out_f)
-            print(f"  * Members of 'PartType2': {list(snap_dat['PartType2'].keys())}", flush=True, file=out_f)
             print(f"  * Metadata dictionary: {dict(snap_dat['Header'].attrs.items())}", flush=True, file=out_f)
 #
 ####################################################################################
@@ -317,7 +325,7 @@ def output_halo_particles_hdf5(BH_parameters, sim_num, halo_ID, infall_snap, sna
     if BH_parameters['simulation_name'] == 'pELVIS':
         fname = f"{dir_name}/{run_type}/{sim_num}/hID_{halo_ID}_infall_snap_{infall_snap}_particles.hdf5"
     elif BH_parameters['simulation_name'] == 'FIRE':
-        fname = f"{dir_name}/hID_{halo_ID}_{infall_snap}_particles.hdf5"
+        fname = f"{dir_name}/hID_{halo_ID}_infall_snap_{infall_snap}_particles.hdf5"
     #
     # Make dataset names.
     dset_name_pID = "ParticleIDs"
@@ -342,18 +350,18 @@ def output_halo_particles_hdf5(BH_parameters, sim_num, halo_ID, infall_snap, sna
             # Particle IDs
             if dset_name_pID not in grp:
                 grp.create_dataset(dset_name_pID, data=infall_halo_pIDs)
-            else:
-                print(f"    * Halo {halo_ID}: dataset /snapshot_{current_snap}/{dset_name_pID} already exists and saving is skipped.", flush=True, file=out_f)
+            #else:
+                #print(f"    * Halo {halo_ID}: dataset /snapshot_{current_snap}/{dset_name_pID} already exists and saving is skipped.", flush=True, file=out_f)
             # Coordinates
             if dset_name_coords not in grp:
                 grp.create_dataset(dset_name_coords, data=coords)
-            else:
-                print(f"    * Halo {halo_ID}: dataset /snapshot_{current_snap}/{dset_name_coords} already exists and saving is skipped.", flush=True, file=out_f)
+            #else:
+                #print(f"    * Halo {halo_ID}: dataset /snapshot_{current_snap}/{dset_name_coords} already exists and saving is skipped.", flush=True, file=out_f)
             # Velocities
             if dset_name_vels not in grp:
                 grp.create_dataset(dset_name_vels, data=vels)
-            else:
-                print(f"    * Halo {halo_ID}: dataset /snapshot_{current_snap}/{dset_name_vels} already exists and saving is skipped.", flush=True, file=out_f)
+            #else:
+                #print(f"    * Halo {halo_ID}: dataset /snapshot_{current_snap}/{dset_name_vels} already exists and saving is skipped.", flush=True, file=out_f)
 #
 def make_rockstar_fnames(fdir, num_files, snapshot_num, file_type):
     '''
@@ -392,10 +400,9 @@ def write_header_for_result_text_file(header_statement, out_f):
 * A simple function to print input parameter values in the parameter file.
 '''
 def print_params(BH_parameters, out_f):
-    params_to_print = ['h', 'omega_l', 'omega_m', 'temp_cmb', 'G', 'part_mass', 'subhalo_selection_done', 'halo_particle_tracking_done', 'first_infall_z_high', 'first_infall_z_low',
-                       'min_vinfall', 'max_vinfall', 'two_rockstars', 'last_snapnum', 'tracking_order', 'pID_argsort_made']
-    dirs_to_print = ['base_dir', 'snapnum_info_fname', 'out_statement_dir', 'bloodhound_out_statement_fname_base', 'infall_criteria_out_statement_fname_base', 'infall_subtree_out_dir',
-                     'infall_subtree_out_fname_base', 'tracked_halo_particle_dir']
+    #params_to_print = ['h', 'omega_l', 'omega_m', 'temp_cmb', 'G', 'part_mass', 'subhalo_selection_done', 'halo_particle_tracking_done', 'first_infall_z_high', 'first_infall_z_low', 'min_vinfall', 'max_vinfall', 'two_rockstars', 'last_snapnum', 'tracking_order', 'pID_argsort_made']
+    params_to_print = ['h', 'omega_l', 'omega_m', 'temp_cmb', 'G', 'part_mass', 'do_tree_processing', 'do_subhalo_selection', 'do_halo_particle_tracking', 'do_subhalo_analysis', 'first_infall_z_high', 'first_infall_z_low', 'min_vinfall', 'max_vinfall', 'two_rockstars', 'last_snapnum', 'tracking_order', 'pID_argsort_made']
+    dirs_to_print = ['base_dir', 'snapnum_info_fname', 'out_statement_dir', 'bloodhound_out_statement_fname_base', 'infall_criteria_out_statement_fname_base', 'infall_subtree_out_dir', 'infall_subtree_out_fname_base', 'tracked_halo_particle_dir', 'subhalo_tracking_dir', 'subhalo_catalog_dir', 'tree_hdf5_fname', 'tree_processed_data_out_dir']
     print("####### Input parameters from the parameter file #######", flush=True, file=out_f)
     #
     # Print parameter key: value pairs.
@@ -584,7 +591,7 @@ def open_snap_header_file(fname, sim_name):
     full_snap_list = []
     full_z_list = []
     full_a_list = []
-    full_t_list = []
+    #full_t_list = []
     #full_t_width_list = []
     # Open the file and read-in the data.
     with open(fname) as f:
@@ -605,14 +612,14 @@ def open_snap_header_file(fname, sim_name):
                 full_snap_list.append(int(line_list[0]))
                 full_a_list.append(float(line_list[1]))
                 full_z_list.append(float(line_list[2]))
-                full_t_list.append(float(line_list[3]))
+                #full_t_list.append(float(line_list[3]))
                 #full_t_width_list.append(float(line_list[4]))
     #
     # Convert the lists to arrays.
     full_snap_arr = np.array(full_snap_list)
     full_z_arr = np.array(full_z_list)
     full_a_arr = np.array(full_a_list)
-    full_t_arr = np.array(full_t_list)
+    #full_t_arr = np.array(full_t_list)
     #full_t_width_arr = np.array(full_t_width_list)
     #
     # Make a result dictionary.
@@ -627,7 +634,7 @@ def open_snap_header_file(fname, sim_name):
             "snapshot_numbers": full_snap_arr,
             "redshifts": full_z_arr,
             "scale_factors": full_a_arr,
-            "time": full_t_arr,
+            #"time": full_t_arr,
         }
 
     return(header_dict)
@@ -710,6 +717,18 @@ def various_halo_file_names(base_dir, sim_num):
     # Return the final dictionary.
     return(all_fname_dict)
 #
+#
+def various_halo_file_names_FIRE(base_dir, sim_num):
+    # Initialize a dictionary to return with all file names.
+    fname_dict = {}
+    base_dir = f"{base_dir}/tree_processed_data"
+    # Host main branch file name
+    fname_dict["host_main_branch"] = f'{base_dir}/host_main_branch.csv'
+    fname_dict["tree_main_branch"] = f'{base_dir}/main_branches.hdf5'
+    fname_dict["subtree_main_branch"] = f'{base_dir}/subtree_main_branches.hdf5'
+    #
+    return(fname_dict)
+#
 '''
 * Read-in the main branch data for the host halo.
 '''
@@ -731,32 +750,39 @@ def read_in_host_main_branch_file_FIRE(sim_file_name_dict, sim_num, BH_parameter
     host_x = np.flip(host_main_branch_file.x.values)
     host_y = np.flip(host_main_branch_file.y.values)
     host_z = np.flip(host_main_branch_file.z.values)
+    host_vx = np.flip(host_main_branch_file.vx.values)# I am pretty sure the velocities in rockstar/consistent-trees are in physical units (km/s), so no need to multiply it by sqrt(scale factor): snapshot data velocities are in comoving km/s.
+    host_vy = np.flip(host_main_branch_file.vy.values)
+    host_vz = np.flip(host_main_branch_file.vz.values)
     host_snapnums = np.flip(host_main_branch_file.snapshot.values)
     host_vmax = np.flip(host_main_branch_file['vel.circ.max'].values)
-    host_rvir = np.flip(host_main_branch_file.radius.values)
+    host_rvir = np.flip(host_main_branch_file.radius.values) # physical kpc, it might be in COMOVING kpc!
+    host_scales = np.flip(host_main_branch_file['scale.factor'].to_numpy())
     #host_rvir_pkpc = np.multiply(host_rvir, host_scale)
     #host_tid = np.flip(host_main_branch_file.id.values)
     # Get the time information for the simulation.
-    sim_snapshot_numbers = BH_parameters['time_info_dict']['snapshot_numbers']
-    sim_scale_factors = BH_parameters['time_info_dict']['scale_factors']
-    sim_redshifts = BH_parameters['time_info_dict']['redshifts']
-    sim_t_cosmic = BH_parameters['time_info_dict']['time']
-    sim_t_lookback = sim_t_cosmic[-1] - sim_t_cosmic
+    #sim_snapshot_numbers = BH_parameters['time_info_dict']['snapshot_numbers']
+    #sim_scale_factors = BH_parameters['time_info_dict']['scale_factors']
+    #sim_redshifts = BH_parameters['time_info_dict']['redshifts']
+    #sim_t_cosmic = BH_parameters['time_info_dict']['time']
+    #sim_t_lookback = sim_t_cosmic[-1] - sim_t_cosmic
     # Match the snapshots to get the time information for the host halo tree.
-    first_idx = np.nonzero(np.isclose(sim_snapshot_numbers, host_snapnums[0]))[0][0]
-    host_scale = sim_scale_factors[first_idx:]
-    host_redshift = sim_redshifts[first_idx:]
-    host_t_cosmic = sim_t_cosmic[first_idx:]
-    host_t_lookback = sim_t_lookback[first_idx:]
+    #first_idx = np.nonzero(np.isclose(sim_snapshot_numbers, host_snapnums[0]))[0][0]
+    #host_scale = sim_scale_factors[first_idx:]
+    #host_redshift = sim_redshifts[first_idx:]
+    #host_t_cosmic = sim_t_cosmic[first_idx:]
+    #host_t_lookback = sim_t_lookback[first_idx:]
     #
     # Create a dictionary for the host halo data.
     host_dict = {}
     host_dict['x'] = host_x
     host_dict['y'] = host_y
     host_dict['z'] = host_z
-    host_dict['scale'] = host_scale
+    host_dict['scale.factor'] = host_scales
     host_dict['vmax'] = host_vmax
     host_dict['rvir'] = host_rvir
+    host_dict['vx'] = host_vx
+    host_dict['vy'] = host_vy
+    host_dict['vz'] = host_vz
     #host_dict['rvir_phys'] = host_rvir_pkpc
     #host_dict['tree_id'] = host_tid
     return(host_dict)

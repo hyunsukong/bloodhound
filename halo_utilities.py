@@ -8,6 +8,7 @@ import binascii
 import pandas as pd
 import numpy as np
 import h5py
+from scipy.interpolate import interp1d
 import time
 #from scipy.integrate import quad
 #import scipy.special as special
@@ -35,7 +36,37 @@ G=4.30091*1e-6 # kpc * Msolar^-1 * (km/s)^2
 pd.set_option('display.max_columns', None)
 #cosmo = FlatLambdaCDM(H0=67.51, Om0=0.3121, Tcmb0=2.725)
 
-
+def distance_interpolation(sub_coord_arr, host_coord_arr, scale_arr, interp_factor):
+    '''
+    * This function interpolates distances between snapshots for an array of coordinates given. It uses an array interpolation instead of interpolating the orbit in a more physical way (e.g., using velocities/potential). It may not be the most accurate way, but it still is better than using just the snapshot data.
+    * In an older version, it used scipy.interpolation.interp1d with kind='linear', but this updated version will use numpy.interp as scipy's interp1d is now a legacy class.
+      - From my test with 20 cases, I find that the two methods give identical results.
+    * This interpolates the x, y, and z coordinates of the subhalo and the host halo separately, then computes the distance.
+    * scale_arr must be monotonically increasing for numpy.interp to work.
+    * Returns:
+      - interp_dist_arr
+      - interp_scale_arr
+    '''
+    # Length of the new interpolated array I want.
+    npts = int(len(sub_coord_arr) * interp_factor)
+    # New scale factor array with finer time steps.
+    interp_scale_arr = np.linspace(scale_arr[0], scale_arr[-1], npts)
+    # Compute dx, dy, dz: component-wise distance from the center of the host halo for each particle.
+    # Subhalo coordinate interpolation
+    x_sub_interp = np.interp(interp_scale_arr, scale_arr, sub_coord_arr[:,0])
+    y_sub_interp = np.interp(interp_scale_arr, scale_arr, sub_coord_arr[:,1])
+    z_sub_interp = np.interp(interp_scale_arr, scale_arr, sub_coord_arr[:,2])
+    # Host halo coordinate interpolation
+    x_host_interp = np.interp(interp_scale_arr, scale_arr, host_coord_arr[:,0])
+    y_host_interp = np.interp(interp_scale_arr, scale_arr, host_coord_arr[:,1])
+    z_host_interp = np.interp(interp_scale_arr, scale_arr, host_coord_arr[:,2])
+    # Compute the subhalo distance using the interpolated coordinates.
+    interp_dist_arr = np.sqrt(
+        (x_host_interp - x_sub_interp)**2. +
+        (y_host_interp - y_sub_interp)**2. +
+        (z_host_interp - z_sub_interp)**2.
+    )
+    return(interp_dist_arr, interp_scale_arr)
 '''
 * This function computes the circular velocity profile of a given halo at the given snapshot.
 * Input: 
@@ -526,7 +557,7 @@ def concentration_one_halo(vcirc_arr, dist_arr):
     '''
         
     # Compute C_v
-    cv = 2*(vmax/(H0*rmax))**2
+    cv = 2.*(vmax/(H0*rmax))**2.
         
     # Compute C_v/2
     # cv_half = 0.5* (vmax/(H0 * r_half_max))**2
@@ -1118,8 +1149,8 @@ def vmax_all_snaps(halo_obj, run_type):
     cv_list = 2*(np.array(vmax_list) / (H0 * np.array(rmax_list)))**2
         
     return(vmax_list, rmax_list, cv_list)
-    
-
+#    
+# This function is old: a more elaborate version is get_pericenters() in halo_analysis.py
 def find_pericenters(dist_arr):
     '''
     * Function to obtain the number of pericentric passages for a subhalo's orbit.
@@ -1139,7 +1170,6 @@ def find_pericenters(dist_arr):
             out_list.append(peri_idx)
         
     return(out_list) 
-
 
 def match_halo_to_catalog_com(coord, cat_df, com_range):
     '''

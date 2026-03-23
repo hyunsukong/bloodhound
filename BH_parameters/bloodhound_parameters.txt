@@ -20,29 +20,43 @@ temp_cmb = 2.725 # Kelvin
 # Gravitational constant 
 G = 4.30091e-6 # (km/s)^2 * kpc/Msolar
 #
-# Mass of simulation particles
+# Mass of simulation particles: it assumes equal mass particles for dark matter - this (and Bloodhound itself) might need to be updated in the future to handle simulations where the dark matter particles have different masses.
+# For GIZMO zoom-in simulations like FIRE, this is fine as PartType=1 (high-res DM particles) have equal masses.
 part_mass = 24697.1 # 1.9693723*1e-06*1e10/h, M_solar
 #
 ## Directory/file paths/simulation numbers ##
 base_dir = '/scratch/05097/hk9457/FIREII/m12c_r7100'
-snapnum_info_fname = f'{base_dir}/snapshot_times.txt'
+snapnum_info_fname = f'{base_dir}/snapshot_redshift_scale-factor.txt'
 out_statement_dir = f'{base_dir}/bloodhound_subhalo_tracking/bloodhound_jobs'
 bloodhound_out_statement_fname_base = "bloodhound_result"
 infall_criteria_out_statement_fname_base = "infall_criteria_result"
 infall_subtree_out_dir = f'{base_dir}/bloodhound_subhalo_tracking/infalling_subhalo_result'
 infall_subtree_out_fname_base = "infall_subhalo"
 tracked_halo_particle_dir = f'{base_dir}/bloodhound_subhalo_tracking/tracked_halo_particles'
+subhalo_tracking_dir = f'{base_dir}/bloodhound_subhalo_tracking/tracked_subhalo_data'
+subhalo_catalog_dir = f'{base_dir}/bloodhound_subhalo_tracking/tracked_subhalo_data'
+tree_hdf5_fname = f'{base_dir}/halo/rockstar_dm/catalog_hdf5/tree.hdf5'
+tree_processed_data_out_dir = f'{base_dir}/tree_processed_data'
 #
-# Whether infalling subhalos have already been identified or not. If not, do this step first.
-subhalo_selection_done = 1 # 0: false, 1: true
+## Operations to run ##
+# Step 1: Processing the merger tree data
+# This step will produce: 1) main branches for all surviving halos, 2) for all destroyed halos, 3) host halo, 4) subhalo catalog (contains both surviving and destroyed subhalos).
+do_tree_processing = 0 # 0: false-skip this step, 1: true-do this step
 #
-# Whether halo particle tracking for identified infalling subhalos have already been done or not.
-# If it's already been done, move on to the subhalo analysis step.
-halo_particle_tracking_done = 0 # 0: false, 1:true
+# Step 2: Identifying infalling subhalos from the (processed, Step 1) merger tree data
+#subhalo_selection_done = 1 # 0: false, 1: true
+do_subhalo_selection = 0 # 0: false-skip this step, 1: true-do this step
+#
+# Step 3: Tracking subhalo particles across snapshots
+do_halo_particle_tracking = 1 # 0: false-skip this step, 1: true-do this step
+#
+# Step 4: Analyzing subhalo properties using the tracked particles
+do_subhalo_analysis = 0 # 0: false-skip this step, 1: true-do this step
 #
 # Simulation numbers/names
+# For FIRE simulations, this corresponds to the name of the simulation folder: e.g., m12c_r7100.
+# It must be provided in a list, even if it is for a single simulation: e.g., [m12c_r7100]
 #sim_nums = [493, 539, 609, 694, 833, 848, 879, 988, 1107, 1245, 1386]
-#sim_nums = [493]
 sim_nums = [m12c_r7100]
 last_snapnum = 600
 #
@@ -54,7 +68,8 @@ num_rockstar_files = 16
 #
 # Whether the same halos need to be tracked in multiple simulations.
 # Example: Phat ELVIS has Disk simulations that are identical to their DMO counterparts.
-# I am going to incorporate this later. Right now, let's just make it work for Phat ELVIS.
+# I am going to incorporate this more generally. Right now, let's just make it work for Phat ELVIS.
+# For FIRE simulations, ignore this parameter.
 tracking_order = [disk, dmo]
 #
 # Does the snapshot particle ID argsort file exist?
@@ -64,18 +79,21 @@ pID_argsort_made = 0 # 0: false, 1: true
 #
 ## Subhalo selection criteria parameters ##
 #
-# Simulation type (DMO/Disk) from which infalling subhalos are identified, if Phat ELVIS.
+# Simulation type (DMO/Disk) from which infalling subhalos are identified, only if Phat ELVIS.
+# For other simulations, simply ignore this parameter.
 run_type = 'disk'
 #
 # Whether to use actually infalling subhalos only for tracking or to include broken-link tree subhalos.
 infalling_only = 1 # 0: false, 1: true
 #
 # First infall redshifts.
-first_infall_z_high = 3.
+first_infall_z_high = 6.
 first_infall_z_low = 0.05
 #
 # Minimum V_infall to use.
-min_vinfall = 4.5
+# I recommend tracking large v_infall subhalos separately as subhalos with a large number of particles take considerably more time in the tracking process.
+# Example: run Bloodhound first with min_vinfall=4. and max_vinfall=70., then again with min_vinfall=70. and max_vinfall=120.
+min_vinfall = 4.
 max_vinfall = 70.
 #
 ################################################################################################
@@ -99,6 +117,9 @@ vmax_range = 0.2
 # Fraction of most bound particles at infall to use to compute COM.
 most_bound_frac = 0.02
 #
+# Maximum fraction of low-resolution particles in a halo in the merger tree data to trust the halo result.
+low_res_frac = 0.05
+#
 # Minumum and maximum number of most bound particles at infall to use to compute COM.
 # If number of particles * most_bound_frac is outside of most_bound_min or most_bound_max, either of these values will be used.
 # If the total number of particles is below most_bound_min, then Bloodhound will just use all of the particles. But it might be worth removing those subhalos from the analysis completely.
@@ -109,5 +130,13 @@ most_bound_max = 500
 cv_rapid_drop_frac = 0.3
 cv_infall_frac = 0.2
 cv_stays_low_frac = 0.4
+#
+# Parameters for pericenter computation
+# Target time spacing for interpolation in Gyr
+target_t_space_gyr = 0.007
+# Target time spacing for scipy's savgol_filter window size in Gyr
+target_savgol_window_gyr = 0.2
+# Radial velocity fraction consistency threshold before and after the pericenter: this fraction of radial velocities must be negative in snapshots before the pericenter and positive after the pericenter.
+vrad_sign_frac_threshold = 0.9
 #
 ### Output parameters ###

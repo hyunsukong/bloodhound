@@ -20,6 +20,7 @@ import h5py
 import numpy as np
 import pandas as pd
 import struct
+import sys
 import time
 #-----------------------------------------------------------------------------------
 # Import local modules/libraries/scripts.
@@ -27,12 +28,14 @@ import time
 import halo_analysis
 import halo_utilities
 import infall_subhalo_criteria
+import tree_pre_processing
 import utilities
 #
 #-----------------------------------------------------------------------------------
 # Input parameters
 #-----------------------------------------------------------------------------------
-parameter_fname = '/scratch/05097/hk9457/FIREII/m12c_r7100/bloodhound_subhalo_tracking/bloodhound_test/BH_parameters/bloodhound_parameters_m12c_r7100.txt'
+#parameter_fname = '/scratch/05097/hk9457/FIREII/m12b7e3_sidm1/bloodhound_subhalo_tracking/bloodhound_updating/BH_parameters/bloodhound_parameters.txt'
+from config import parameter_fname
 #
 #-----------------------------------------------------------------------------------
 # Fuctions
@@ -125,7 +128,7 @@ def read_in_infalling_subtree_data(BH_parameters, sim_num, out_f):
 
 '''
 def remove_incomplete_subtrees_FIRE(infall_subtree_df, BH_parameters, out_f):
-    print(f"* 1) Number of subhalos in the infalling subtree file: {len(infall_subtree_df.groupby('tree.tid'))}", file=out_f)
+    print(f"* 1) Number of subhalos (both surviving and destroyed/disrupted) in the infalling subtree file: {len(infall_subtree_df.groupby('tree.tid'))}", flush=True, file=out_f)
     # Take only infalling subhalos: infalling? = 1.
     infalling_query = infall_subtree_df.query("`infalling?` == 1")
     print(f"* 2) Number of actually infalling subhalos in 1) (infalling? = 1): {len(infalling_query.groupby('tree.tid'))}", flush=True, file=out_f)
@@ -134,7 +137,7 @@ def remove_incomplete_subtrees_FIRE(infall_subtree_df, BH_parameters, out_f):
     return(infalling_query)
 #
 def remove_incomplete_subtrees(infall_subtree_df, BH_parameters, out_f):
-    print(f"* 1) Number of subhalos in the infalling subtree file: {len(infall_subtree_df.groupby('subtree_id'))}", file=out_f)
+    print(f"* 1) Number of subhalos in the infalling subtree file: {len(infall_subtree_df.groupby('subtree_id'))}", flush=True, file=out_f)
     if BH_parameters["two_rockstars"] == 1:
         # Halo matching between two Rockstar sets was done, so
         # take only subtrees that has a real value for ID.halo.infall: remove those with ID.halo.infall=-1.
@@ -163,9 +166,12 @@ def get_infall_information(infall_subtree_df):
     sid_list = []
     hid_list = []
     #
-    # Get unique arrays for scale.infall and snapshot.infall, preserving the order.
-    infall_information_dict["scale.infall"] = infall_subtree_df['scale.infall'].unique()
-    infall_information_dict["snapshot.infall"] = infall_subtree_df['snapshot.infall'].unique()
+    # Get unique arrays for scale.infall and snapshot.infall, preserving the order (uses pandas.series.unique()).
+    # Get unique arrays for scale.infall and snapshot.infall, from early to late times (uses numpy.unique()).
+    infall_information_dict["scale.factor.infall"] = np.unique(infall_subtree_df['scale.factor.infall'].values)
+    infall_information_dict["snapshot.infall"] = np.unique(infall_subtree_df['snapshot.infall'].values)
+    #infall_information_dict["scale.infall"] = infall_subtree_df['scale.infall'].unique()
+    #infall_information_dict["snapshot.infall"] = infall_subtree_df['snapshot.infall'].unique()
     for i in range(len(infall_information_dict["snapshot.infall"])):
         current_snapnum = infall_information_dict["snapshot.infall"][i]
         current_subtrees = infall_subtree_df.query("`snapshot.infall`== @current_snapnum")
@@ -290,8 +296,11 @@ def get_infall_particle_IDs(infall_information_dict, BH_parameters, sim_num, out
     #
     infall_snapshot_arr = infall_information_dict["snapshot.infall"]
     infall_hid_list = infall_information_dict["ID.halo.infall"]
+    ####### test #######
+    #infall_snapshot_arr = infall_snapshot_arr[72:85]
+    #infall_hid_list = infall_hid_list[72:85]
     #
-    for i in range(len(infall_snapshot_arr[:5])):
+    for i in range(len(infall_snapshot_arr)):
         current_snap = infall_snapshot_arr[i]
         current_snap_infall_hid_arr = infall_hid_list[i]
         #
@@ -320,6 +329,9 @@ def get_infall_particle_IDs(infall_information_dict, BH_parameters, sim_num, out
         # Append the pID list for the current snapshot to the result dictionary.
         infall_information_dict['ID.particle'].append(current_snap_pID_list)
     #
+    # Convert the final infall particle ID list to an array.
+    infall_information_dict['ID.particle'] = np.array(infall_information_dict['ID.particle'], dtype=object)
+    #
     return(infall_information_dict)
 #
 def initialize_halo_tracking_FIRE(BH_parameters, sim_num, out_f):
@@ -347,6 +359,11 @@ def initialize_halo_tracking_FIRE(BH_parameters, sim_num, out_f):
     print("", flush=True, file=out_f)
     #
     # Return the infalling subhalo data dictionary.
+    ##### Test #####
+    #test_print_dict = {"snapshot.infall":infall_information_dict["snapshot.infall"],
+    #                  "ID.halo.infall":infall_information_dict["ID.halo.infall"]}
+    #pd.set_option('display.max_rows', None)
+    #print(pd.DataFrame.from_dict(test_print_dict, orient='columns'))
     return(infall_information_dict)
 #
 def initialize_halo_tracking(BH_parameters, sim_num, out_f):
@@ -393,6 +410,8 @@ def initialize_snapshot_data_FIRE(BH_parameters, sim_num, snap_num, base_dir, us
         utilities.print_time_taken(t_s_step, t_e_step, "*" ,True, out_f)
         #
         # Read in the particle ID sort index data, if it exists.
+        # I don't think use_argsort=True will ever happen.
+        # Now, I am sorting the particle ID data anyway!
         if use_argsort:
             print(f"* Reading in the particle ID sort index data: snapshot {snap_num} ... ", end="", flush=True, file=out_f)
             t_s_step = time.time()
@@ -470,21 +489,29 @@ def track_particles(snapshot_obj, halo_pID, use_argsort):
         pID_idx_in_snap = snapshot_obj["pID.sort_idx"][halo_pID]
     else:
         # If the particle ID argsort data doesn't exist, look for the particle IDs using numpy.isin()
-        pID_idx_in_snap = np.nonzero(np.isin(snapshot_obj["ID.particle"], halo_pID))[0]
+        #pID_idx_in_snap = np.nonzero(np.isin(snapshot_obj["ID.particle"], halo_pID))[0]
+        # *** The new version does arg_sort when reading in the particle data, so use it!!
+        # Shift the halo particle IDs by the smallest particle ID in the entire simulation: then halo particle IDs can be used as indices.
+        halo_pID_shifted = halo_pID - snapshot_obj['ID.particle.min']
+        pID_idx_in_snap = snapshot_obj["pID.sort_idx"][halo_pID_shifted]
     #
     # Get coordinates and velocities for the particles.
     tracked_coords = snapshot_obj["Coordinates"][pID_idx_in_snap]
     tracked_vels = snapshot_obj["Velocities"][pID_idx_in_snap]
     #
     # Return results as a list.
+    #print(len(halo_pID), len(tracked_coords))
     return([tracked_coords, tracked_vels])
 #
 def remove_odd_pIDs(hID, snapshot_obj, halo_pID, use_argsort, out_f):
     '''
+    *** Outdated ***
     * For some odd reason, there are very rare cases where pID_arr contains IDs that are 
       greater than the total number of particles in the snapshot.
       Check it and remove those pIDs from pID_arr.
       Also print their halo ID!
+    * The "odd" particle ID cases happens because GIZMO's particle IDs are numbered continuously from PartType0 to PartTypeN and Rockstar uses PartType1 (DM) and PartType2 (low-res DM).
+    * So it's actually not "odd" and this function should not be used.
     '''
     if use_argsort==True:
         snapshot_num_particles = len(snapshot_obj["pID.sort_idx"])
@@ -499,6 +526,171 @@ def remove_odd_pIDs(hID, snapshot_obj, halo_pID, use_argsort, out_f):
         print(f'  * Number of "BAD" particles: {len(pID_check_mask)}', flush=True, file=out_f)
         halo_pID = np.delete(halo_pID, pID_check_mask)
     return(halo_pID)
+#
+def make_subhalo_catalog(BH_parameters, sim_num, full_tracking_df_list, out_f):
+    '''
+    * This function takes in the full tracking data for all tracked subhalos (list of dataframes), and constructs a subhalo catalog.
+      - Properties such as x, y, z, vmax, etc. are taken at the last snapshot of the subhalo:
+        - surviving: last snapshot of the simulation
+        - destroyed: at the snapshot of disruption
+      - It retrieves the tree.tid information from the infall tree/subtree data,
+      - Input:
+        - full_tracking_df_list - list of dataframes where each dataframe is a tracking data of a subhalo.
+      - Data: all values are in non-h units.
+        - ID.halo.infall:
+        - ID.tree: tree ID of the subhalo in the merger tree data, taken from the last snapshot (old name: tree.tid)
+        - snapshot.infall:
+        - scale.infall:
+        - number.of.particles.infall: number of particles that were assigned to the halo at the infall snapshot
+        - scale.disrupt:
+        - rmax.infall:
+        - rmax.peak:
+        - rmax:
+        - x, y, z: comoving kpc
+        - host.x, host.y, host.z: physical kpc
+        - distance.from.host.ckpc: comoving kpc
+        - closest.pericenter: physical kpc
+    '''
+    # Initialize the result dictionary.
+    result_dict = {
+        "ID.tree":[],
+        "ID.halo.infall":[],
+        "snapshot.infall":[],
+        "scale.factor.infall":[],
+        "number.of.particles.infall":[],
+        "is.infalling":[],
+        "scale.factor.disrupt":[],
+        "vmax":[],
+        "vmax.infall":[],
+        "vmax.peak":[],
+        "scale.factor.vmax.peak":[],
+        "rmax":[],
+        "rmax.infall":[],
+        "rmax.peak":[],
+        "scale.radius.klypin":[],
+        "radius.boundary":[],
+        "closest.pericenter":[],
+        "scale.factor.closest.pericenter":[],
+        "number.of.pericenters":[],
+        "distance.from.host.ckpc":[],
+        "x":[],
+        "y":[],
+        "z":[],
+        "host.x":[],
+        "host.y":[],
+        "host.z":[],
+        "vx":[],
+        "vy":[],
+        "vz":[],
+        "host.vx":[],
+        "host.vy":[],
+        "host.vz":[],
+        "host.vrad":[],
+        "time.survival.gyr":[]
+    }
+    # Read in the infall tree and subtree data to get the tree.tid information.
+    #if BH_parameters['simulation_name'] == 'pELVIS':
+    #    infalling_subtree_df = read_in_infalling_subtree_data(BH_parameters, sim_num, out_f)
+    if BH_parameters['simulation_name'] == 'FIRE':
+        infall_subtree_df = read_in_infalling_subtree_data_FIRE(BH_parameters, sim_num, 'subtree', out_f)
+        infall_tree_df = read_in_infalling_subtree_data_FIRE(BH_parameters, sim_num, 'tree', out_f)
+        # Merge the two dataframes.
+        infall_subhalo_tree_df = pd.concat([infall_subtree_df, infall_tree_df])
+    for i in range(len(full_tracking_df_list)):
+        current_df = full_tracking_df_list[i]
+        # Some information (e.g., ID.halo.infall, snapshot.infall, particle.mass etc.) can be read in from any row. Get it from the first row.
+        first_row = current_df.iloc[0] # The first row read in as pandas series.
+        ID_halo = int(first_row['ID.halo.infall'])
+        snap_infall = int(first_row['snapshot.infall'])
+        scale_disrupt = first_row['scale.factor.disrupt']
+        num_particles_infall = int(first_row['number.of.particles.infall'])
+        # Remove data after disruption: if the subhalo doesn't disrupt, end_idx is simply that of the last snapshot.
+        if scale_disrupt == -1:
+            # subhalo doesn't disrupt.
+            end_idx = None
+        else:
+            # subhalo disrupts: +1 to include the disruption snapshot.
+            end_idx = np.where(np.isclose(current_df['scale.factor'], scale_disrupt, atol=1e-4))[0][0] + 1
+        # Slice the tracking data from infall to the last (z=0 or disruption) snapshot.
+        current_df = current_df[:end_idx]
+        # Identify the current subhalo in the tree data to get the tree.tid data:
+        #  - for most cases, queryig by halo_ID should be enough. But also use infall_snap just in case there are more than one subhalo with the same infall halo ID.
+        current_halo_tree_df = infall_subhalo_tree_df.query("`ID.halo.infall`==@ID_halo and `snapshot.infall`==@snap_infall")
+        tree_first_row = current_halo_tree_df.iloc[0]
+        ID_tree = int(tree_first_row['tree.tid'])
+        scale_infall = tree_first_row['scale.factor.infall']
+        is_it_infalling = int(tree_first_row['infalling?'])
+        # Get the halo properties at the infall, peak, and "last" (either at z=0 or disruption) snapshots.
+        vmax_arr = current_df['vmax'].values
+        rmax_arr = current_df['rmax'].values
+        scale_arr = current_df['scale.factor'].values
+        vmax_last = vmax_arr[-1]
+        vmax_infall = vmax_arr[0]
+        vmax_peak_idx = np.argmax(vmax_arr)
+        vmax_peak = vmax_arr[vmax_peak_idx]
+        rmax_last = rmax_arr[-1]
+        rmax_infall = rmax_arr[0]
+        rmax_peak = rmax_arr[vmax_peak_idx]
+        scale_vmax_peak = scale_arr[vmax_peak_idx]
+        scale_last = scale_arr[-1] # Either 1 (surviving) or the disruption time.
+        last_row = current_df.iloc[-1]
+        x = last_row.x
+        y = last_row.y
+        z = last_row.z
+        rel_x = last_row['host.x']
+        rel_y = last_row['host.y']
+        rel_z = last_row['host.z']
+        distance = last_row['distance.from.host.ckpc']
+        vx = last_row.vx
+        vy = last_row.vy
+        vz = last_row.vz
+        rel_vx = last_row['host.vx']
+        rel_vy = last_row['host.vy']
+        rel_vz = last_row['host.vz']
+        rel_vrad = last_row['host.velocity.rad']
+        rs_klypin = last_row['scale.radius.klypin']
+        t_lb_infall = BH_parameters['cosmo'].lookback_time(1./scale_infall - 1.).value
+        t_lb_disrupt = BH_parameters['cosmo'].lookback_time(1./scale_last - 1.).value
+        t_surv = t_lb_infall - t_lb_disrupt
+        r_boundary = last_row['radius.boundary']
+        # Append result to the dictionary.
+        result_dict['ID.tree'].append(ID_tree)
+        result_dict['ID.halo.infall'].append(ID_halo)
+        result_dict['snapshot.infall'].append(snap_infall)
+        result_dict['scale.factor.infall'].append(scale_infall)
+        result_dict['number.of.particles.infall'].append(num_particles_infall)
+        result_dict['is.infalling'].append(is_it_infalling)
+        result_dict['scale.factor.disrupt'].append(scale_last)
+        result_dict['vmax'].append(vmax_last)
+        result_dict['vmax.infall'].append(vmax_infall)
+        result_dict['vmax.peak'].append(vmax_peak)
+        result_dict['scale.factor.vmax.peak'].append(scale_vmax_peak)
+        result_dict['rmax'].append(rmax_last)
+        result_dict['rmax.infall'].append(rmax_infall)
+        result_dict['rmax.peak'].append(rmax_peak)
+        result_dict['scale.radius.klypin'].append(rs_klypin)
+        result_dict['radius.boundary'].append(r_boundary)
+        result_dict['closest.pericenter'].append(first_row['closest.pericenter'])
+        result_dict['scale.factor.closest.pericenter'].append(first_row['scale.factor.closest.pericenter'])
+        result_dict['number.of.pericenters'].append(int(first_row['number.of.pericenters']))
+        result_dict['distance.from.host.ckpc'].append(distance)
+        result_dict['x'].append(x)
+        result_dict['y'].append(y)
+        result_dict['z'].append(z)
+        result_dict['host.x'].append(rel_x)
+        result_dict['host.y'].append(rel_y)
+        result_dict['host.z'].append(rel_z)
+        result_dict['vx'].append(vx)
+        result_dict['vy'].append(vy)
+        result_dict['vz'].append(vz)
+        result_dict['host.vx'].append(rel_vx)
+        result_dict['host.vy'].append(rel_vy)
+        result_dict['host.vz'].append(rel_vz)
+        result_dict['host.vrad'].append(rel_vrad)
+        result_dict['time.survival.gyr'].append(t_surv)
+    # Convert the subhalo catalog dictionary to a pandas dataframe
+    result_df = pd.DataFrame.from_dict(result_dict, orient='columns')
+    return(result_df)       
 #
 def subhalo_tracking_wrapper_function(BH_parameters, sim_num, infall_information_dict, out_f):
     '''
@@ -519,15 +711,23 @@ def subhalo_tracking_wrapper_function(BH_parameters, sim_num, infall_information
     print(f"  {track_snapnums}", flush=True, file=out_f)
     print("", flush=True, file=out_f)
     #
-    infall_hid_list = infall_information_dict["ID.halo.infall"]
-    infall_halo_pID_list = infall_information_dict['ID.particle']
+    infall_hid_arr = infall_information_dict["ID.halo.infall"]
+    infall_halo_pID_arr = infall_information_dict['ID.particle']
     #
     # Perform halo tracking at each snapshot: retrieves the coordinates and velocities of halo particles at each snapshot.
     num_subs_tracking_started = 0
     num_subs_last_infall_snap = 0
+    ##### Test #####
+    #infall_snapnums = infall_snapnums[72:85]
+    #track_snapnums = np.arange(np.min(infall_snapnums), 150, 1)
+    ##### Test #####
     for i in range(len(track_snapnums)):
         t_s_snap = time.time()
         current_snap = track_snapnums[i]
+        ######### Test ##########
+        #if current_snap < 144:
+        #    continue
+        ######### Test ##########
         print(f"# Current snapshot: {current_snap} #", flush=True, file=out_f)
         #
         # Initialize the snapshot dictionary which contains a snapshot dictionary-class for each element in BH_parameters['tracking_order'].
@@ -537,6 +737,7 @@ def subhalo_tracking_wrapper_function(BH_parameters, sim_num, infall_information
             snapshot_data_dict = initialize_snapshot_data_FIRE(BH_parameters, sim_num, current_snap, BH_parameters['base_dir'], use_argsort, out_f)
         #
         # For the first snapshot used, print some useful information.
+        #if i >= 0:
         if i == 0:
             print("* Snapshot file information:", flush=True, file=out_f)
             print("  * Only for the first snapshot used", flush=True, file=out_f)
@@ -554,8 +755,8 @@ def subhalo_tracking_wrapper_function(BH_parameters, sim_num, infall_information
             # There are infalling subhalos in the current snapshot.
             infall_idx = np.where(infall_snapnums == current_snap)[0][0]
             infall_snap = infall_snapnums[infall_idx]
-            current_snap_infalling_hids = infall_hid_list[infall_idx]
-            current_snap_infalling_halos_pID_list = infall_halo_pID_list[infall_idx]
+            current_snap_infalling_hids = infall_hid_arr[infall_idx]
+            current_snap_infalling_halos_pID_arr = infall_halo_pID_arr[infall_idx]
             #
             # Update the number of subhalos that have already started tracking.
             num_subs_tracking_started += num_subs_last_infall_snap
@@ -567,22 +768,27 @@ def subhalo_tracking_wrapper_function(BH_parameters, sim_num, infall_information
             # Tracking halos infalling at the current snapshot.
             print(f"  * Tracking {len(current_snap_infalling_hids)} subhalo(s) infalling at the current snapshot ({infall_snap})...", flush=True, file=out_f)
             t_s_step = time.time()
-            for j in range(len(current_snap_infalling_hids)):
+            for j in range(len(current_snap_infalling_hids[:])):
                 # Get halo ID and particle IDs for the current halo.
                 current_hID = current_snap_infalling_hids[j]
-                current_halo_pIDs = current_snap_infalling_halos_pID_list[j]
+                current_halo_pIDs = current_snap_infalling_halos_pID_arr[j]
+                #if current_hID == 18490:
+                #    print()
+                #    print("18490 located!!")
+                #    print()
+                #print(current_halo_pIDs)
+                #print(np.max(current_halo_pIDs))
                 #
                 # Tracking halo particles.
                 for key in snapshot_data_dict:
                     # Remove particle IDs that are larger than the total number of particles in the snapshot.
                     # This is weird, but they exist for a very rare number of cases.
-                    current_halo_pIDs = remove_odd_pIDs(current_hID, snapshot_data_dict[key], current_halo_pIDs, use_argsort, out_f)
+                    #current_halo_pIDs = remove_odd_pIDs(current_hID, snapshot_data_dict[key], current_halo_pIDs, use_argsort, out_f)
                     infall_information_dict['ID.particle'][infall_idx][j] = current_halo_pIDs
                     # Get halo particles' coordinates and velocities at the current snapshot.
                     tracked_particle_data = track_particles(snapshot_data_dict[key], current_halo_pIDs, use_argsort)
                     #
                     # Save tracked particle data in a .hdf5 file.
-                    
                     utilities.output_halo_particles_hdf5(BH_parameters, sim_num, current_hID, infall_snap, [current_snap], current_halo_pIDs, [tracked_particle_data], key, out_f)
             #
             t_e_step = time.time()
@@ -607,12 +813,13 @@ def subhalo_tracking_wrapper_function(BH_parameters, sim_num, infall_information
         print(f"    * {infall_snapnums_used}", flush=True, file=out_f)
         for j in range(len(infall_snapnums_used)):
             earlier_infall_snap = infall_snapnums_used[j]
-            earlier_snap_infalling_hids = infall_hid_list[j]
-            earlier_snap_infalling_halos_pID_list = infall_halo_pID_list[j]
+            earlier_snap_infalling_hids = infall_hid_arr[j]
+            earlier_snap_infalling_halos_pID_arr = infall_halo_pID_arr[j]
             for k in range(len(earlier_snap_infalling_hids)):
                 # Get halo ID and particle IDs for the current halo.
                 current_hID = earlier_snap_infalling_hids[k]
-                current_halo_pIDs = earlier_snap_infalling_halos_pID_list[k]
+                current_halo_pIDs = earlier_snap_infalling_halos_pID_arr[k]
+                #print(np.max(current_halo_pIDs))
                 # Tracking halo particles.
                 for key in snapshot_data_dict:
                     # Get halo particles' coordinates and velocities at the current snapshot.
@@ -630,56 +837,110 @@ def subhalo_tracking_wrapper_function(BH_parameters, sim_num, infall_information
 #
 def subhalo_analysis_wrapper_function(BH_parameters, sim_num, snapnum_info_dict, out_f):
     '''
-    * This is a wrapper function for performing subhalo analysis for all subhalos.
+    * This is a wrapper function for performing subhalo analysis for all subhalos tracked in previous steps of Bloodhound.
     - Need file paths for
       - host tree main branch file: DMO and Disk
       - DMO surviving halo main branch file
       - DMO subtree main branch file
       - Disk subtree file with subhalos found by using the infall criteria
     '''
-    # Make the file names for host halo main tree data: host_halo_dat_fnames will also contain file names for other data, but these will not be used.
-    host_halo_dat_fnames = utilities.various_halo_file_names(BH_parameters['base_dir'], sim_num)
-    # Directory path for tracked halo particles.
+    t_s_step = time.time()
     tracked_halo_particle_dir = BH_parameters["tracked_halo_particle_dir"]
-    #
-    sim_types = BH_parameters["tracking_order"]
-    #
-    #
-    halo_particle_file_info_dict = {}
-    #
-    ### Test ###
-    halo_list = []
-    ### ###
-    for i in range(len(sim_types)):
-        sim_type = sim_types[i]
-        # Read in the host halo main branch data.
-        # Everything is read in with non-h units.
-        host_halo_dict = utilities.read_in_host_main_branch_file(host_halo_dat_fnames, sim_num, sim_type, BH_parameters)
-        print()
-        print(f"sim_type: {sim_type}")
-        # Directory path to all tracked halo particle data for the current simulation number and type
+    # Empty list to append the (tree-like) halo tracking data to.
+    full_tracking_df_list = []
+    if BH_parameters['simulation_name'] == 'pELVIS':
+        # Make the file names for host halo main tree data: host_halo_dat_fnames will also contain file names for other data, but these will not be used.
+        host_halo_dat_fnames = utilities.various_halo_file_names(BH_parameters['base_dir'], sim_num)
+        # Directory path for tracked halo particles.
         dpath = f"{tracked_halo_particle_dir}/{sim_type}/{sim_num}"
         print(dpath, flush=True, file=out_f)
+        sim_types = BH_parameters["tracking_order"]
+        for i in range(len(sim_types)):
+            sim_type = sim_types[i]
+            # Read in the host halo main branch data.
+            # Everything is read in with non-h units.
+            host_halo_dict = utilities.read_in_host_main_branch_file(host_halo_dat_fnames, sim_num, sim_type, BH_parameters)
+            #print()
+            #print(f"sim_type: {sim_type}")
+            # Directory path to all tracked halo particle data for the current simulation number and type
+            dpath = f"{tracked_halo_particle_dir}/{sim_type}/{sim_num}"
+            print(dpath, flush=True, file=out_f)
+            hID_arr, infall_snap_arr, full_name_arr = utilities.get_halo_particle_file_names_in_dir(dpath)
+            print(f"{sim_type}, {len(hID_arr)}, {len(infall_snap_arr)}, {len(full_name_arr)}", flush=True, file=out_f)
+            peri_parameters = tree_pre_processing.peri_parameter_dict(BH_parameters['target_t_space_gyr'], BH_parameters['target_savgol_window_gyr'], BH_parameters['vrad_sign_frac_threshold'], host_halo_dict['scale.factor'], BH_parameters, out_f)
+            # Merge the pericenter parameter dictionary to BH_parameters.
+            BH_parameters = BH_parameters | peri_parameters
+            for j in range(len(hID_arr)):
+                current_hID = hID_arr[j]
+                current_infall_snap = infall_snap_arr[j]
+                current_fname = full_name_arr[j]
+                current_halo = halo_analysis.analyze_halo(current_hID, current_infall_snap, current_fname, host_halo_dict, snapnum_info_dict, BH_parameters, out_f)
+                # Append the tracking dataframe to the result list.
+                full_tracking_df_list.append(current_halo['tracking.df'])
+                # Still need to finish this section: most of it will be similar to the FIRE version.
+    elif BH_parameters['simulation_name'] == 'FIRE':
+        # Make the file names for host halo main tree data: host_halo_dat_fnames will also contain file names for other data, but these will not be used.
+        host_halo_dat_fnames = utilities.various_halo_file_names_FIRE(BH_parameters['base_dir'], sim_num)
+    # Directory path for tracked halo particles.
+        # Read in the host halo main branch data.
+        # Everything is read in with non-h units.
+        host_halo_dict = utilities.read_in_host_main_branch_file_FIRE(host_halo_dat_fnames, sim_num, BH_parameters)
+        # Directory path for tracked halo particles.
+        dpath = tracked_halo_particle_dir
+        # Get tracked halo particle file information in the directory.
         hID_arr, infall_snap_arr, full_name_arr = utilities.get_halo_particle_file_names_in_dir(dpath)
-        print(f"{sim_type}, {len(hID_arr)}, {len(infall_snap_arr)}, {len(full_name_arr)}", flush=True, file=out_f)
+        print(f"* Number of tracked subhalo particle files to read in: {len(hID_arr)}", flush=True, file=out_f)
+        # Parameters to use for the pericenter computation
+        peri_parameters = tree_pre_processing.peri_parameter_dict(BH_parameters['target_t_space_gyr'], BH_parameters['target_savgol_window_gyr'], BH_parameters['vrad_sign_frac_threshold'], host_halo_dict['scale.factor'], BH_parameters, out_f)
+        # Merge the pericenter parameter dictionary to BH_parameters.
+        BH_parameters = BH_parameters | peri_parameters
+        # Compute the distance interpolation factor: do this once here rather than once for each subhalo.
+        # Set the minimum at 2.
+        #interp_scale_target = 0.001 # Desired time step size for interpolation, in terms of scale factor.
+        #median_scale_spacing = np.median(host_halo_dict['scale'][1:] - host_halo_dict['scale'][:-1])
+        #interp_factor = int(round(median_scale_spacing / interp_scale_target))
+        #if interp_factor < 2:
+        #    interp_factor = 2
+        #BH_parameters['interpolation_factor'] = interp_factor
         #
-        print(len(hID_arr))
-        for j in range(len(hID_arr[:5])):
+        # Perform halo analysis on each subhalo.
+        for j in range(len(hID_arr[:])):
+            t_s_halo = time.time()
             current_hID = hID_arr[j]
             current_infall_snap = infall_snap_arr[j]
             current_fname = full_name_arr[j]
-            ### Test ###
+            print(f"    * Analyzing... Halo ID-{current_hID}, Infall snapshot-{current_infall_snap} ", end="", flush=True, file=out_f)
+            # Perform subhalo analysis for the current subhalo.
             current_halo = halo_analysis.analyze_halo(current_hID, current_infall_snap, current_fname, host_halo_dict, snapnum_info_dict, BH_parameters, out_f)
-            halo_list.append(current_halo)
-            ### ###
-            #halo_analysis.analyze_halo(current_hID, current_infall_snap, current_fname, snapnum_info_dict, BH_parameters, out_f)
-    ### Test ###
-    return(halo_list)
-    ### ###
-    
+            # Append the tracking dataframe to the result list.
+            full_tracking_df_list.append(current_halo['tracking.df'])
+            t_e_halo = time.time()
+            utilities.print_time_taken(t_s_halo, t_e_halo, "*" ,True, out_f)
+    # Make a subhalo catalog using the tracked data for each of the subhalos.
+    t_s_catalog = time.time()
+    print(f"  * Making a subhalo catalog using the tracking data... ", end="", flush=True, file=out_f)
+    subhalo_catalog_df = make_subhalo_catalog(BH_parameters, sim_num, full_tracking_df_list, out_f)
+    ###### test
+    #pd.set_option('display.width', 200)
+    #print(subhalo_catalog_df)
+    # Save the subhalo catalog as a .csv file.
+    subhalo_catalog_outfname = f"{BH_parameters['subhalo_catalog_dir']}/subhalo_catalog.csv"
+    subhalo_catalog_df.to_csv(subhalo_catalog_outfname, index=False)
+    t_e_catalog = time.time()
+    utilities.print_time_taken(t_s_catalog, t_e_catalog, "*" ,True, out_f)
+    # Convert the list of dataframes to one dataframe.
+    df_tracking_data = pd.concat(full_tracking_df_list)
+    # Save the tracking data dataframe as a .hdf5 file.
+    tracking_data_outfname = f"{BH_parameters['subhalo_tracking_dir']}/subhalo_tracking_data.hdf5"
+    df_tracking_data.to_hdf(tracking_data_outfname, key='df', mode='w')
+    print("", flush=True, file=out_f)
+    print(f"  * Subhalo analysis completed!", flush=True, file=out_f)
+    print(f"    * Subhalo catalog is saved at: {subhalo_catalog_outfname}", flush=True, file=out_f)
+    print(f"    * Tracking data is saved at: {tracking_data_outfname}", flush=True, file=out_f)
 #
 #-----------------------------------------------------------------------------------
-# Main function
+### Main function ###
+# Steps 1--4 can be done separately.
 #-----------------------------------------------------------------------------------
 def main():
     t_s = time.time()
@@ -689,34 +950,48 @@ def main():
     header_statement = "Bloodhound subhalo tracking progress report"
     BH_parameters, sim_nums, base_dir, out_f, snapnum_info_dict = BH_initialization(parameter_fname, header_statement)
     '''
-    * Step 1: Identifying infalling subhalos
+    * Step 1: Merger tree data pre-processing
+    '''
+    # Check the user input in the parameter file to see whether the pre-processing step needs to be done or not.
+    do_tree_processing = BH_parameters['do_tree_processing']
+    if do_tree_processing == 1:
+        t_s_step = time.time()
+        print("####### do_tree_processing = 1: making various halo main-branch and subhalo catalog data... #######", flush=True, file=out_f)
+        tree_pre_processing.main(BH_parameters, out_f)
+        t_e_step = time.time()
+        utilities.print_time_taken(t_s_step, t_e_step, "#######", True, out_f)
+        print("", flush=True, file=out_f)
+    elif do_tree_processing == 0:
+        print("####### do_tree_processing = 0: skip this step! #######", flush=True, file=out_f)
+        print("", flush=True, file=out_f)
+    '''
+    * Step 2: Identifying infalling subhalos
     '''
     #
-    # Check whether infalling subhalos have been identified or not.
-    subhalo_selection_done = BH_parameters['subhalo_selection_done']
-    if subhalo_selection_done == 0:
+    # Check the user input in the parameter file to see whether the subhalo selection step needs to be done or not.
+    do_subhalo_selection = BH_parameters['do_subhalo_selection']
+    if do_subhalo_selection == 1:
         # If it hasn't been done yet, do it now.
         t_s_step = time.time()
-        print("####### Infalling subhalos have not been identified yet! #######", flush=True, file=out_f)
-        print("* Doing this step first!", flush=True, file=out_f)
+        print("####### do_subhalo_selection = 1 #######", flush=True, file=out_f)
+        print("* Identifying infalling subhalos from the merger tree data, for tracking...", flush=True, file=out_f)
         print("* Its progress will be recorded in a separate text file.", flush=True, file=out_f)
         infall_subhalo_criteria.main()
         t_e_step = time.time()
         utilities.print_time_taken(t_s_step, t_e_step, "#######", True, out_f)
         print("", flush=True, file=out_f)
-    elif subhalo_selection_done == 1:
-        print("####### Infalling subhalos have already been identified, so skip this step! #######", flush=True, file=out_f)
+    elif do_subhalo_selection == 0:
+        print("####### do_subhalo_selection = 0: skip this step! #######", flush=True, file=out_f)
         print("", flush=True, file=out_f)
     '''
-    * Step 2: subhalo particle tracking
+    * Step 3: subhalo particle tracking
     '''
     #
-    # Check whether subhalo particle tracking has already been done or not.
-    halo_particle_tracking_done = BH_parameters['halo_particle_tracking_done']
-    if halo_particle_tracking_done == 0:
+    # Check the user input in the parameter file to see whether the subhalo particle tracking step needs to be done or not.
+    do_halo_particle_tracking = BH_parameters['do_halo_particle_tracking']
+    if do_halo_particle_tracking == 1:
         t_s_tracking = time.time()
-        print("####### Starting subhalo tracking, one simulation at a time #######", flush=True, file=out_f)
-        print("", flush=True, file=out_f)
+        print("####### do_halo_particle_tracking == 1: starting subhalo particle tracking #######", flush=True, file=out_f)
         for sim_num in sim_nums:
             t_s_sim = time.time()
             print(f"##### Simulation {sim_num} #####", flush=True, file=out_f)
@@ -753,40 +1028,27 @@ def main():
         utilities.print_time_taken(t_s_tracking, t_e_tracking, "#######", True, out_f)
         print("", flush=True, file=out_f)
         #
-    elif halo_particle_tracking_done == 1:
-        print("####### Infalling subhalo particle tracking is already done, so skip this step! #######", flush=True, file=out_f)
+    elif do_halo_particle_tracking == 0:
+        print("####### do_halo_particle_tracking == 0: skip this step! #######", flush=True, file=out_f)
         print("", flush=True, file=out_f)
     '''
-    * Step 3: subhalo analysis
+    * Step 4: subhalo analysis
     '''
-    print("####### Computing subhalo properties using tracked particles #######", flush=True, file=out_f)
-    print("", flush=True, file=out_f)
     #
-    '''
-    Steps:
-    - Do subhalo analysis
-    - I want to be able to do backward (in time) tracking as well!
-    Need file paths for
-      - host tree main branch file: DMO and Disk
-      - DMO surviving halo main branch file
-      - DMO subtree main branch file
-      - Disk subtree file with subhalos found by using the infall criteria
-    Flow: think about it a little more!
-      - Use a subhalo analysis initialize function to initialize subhalo analysis.
-      - Then use a halo analysis wrapper function in the halo_analysis module to analyze one halo at a time.
-    '''
-    t_s_analysis = time.time()
-    test_result_list = []
-    for sim_num in sim_nums:
-        ### Test ###
-        test_result = subhalo_analysis_wrapper_function(BH_parameters, sim_num, snapnum_info_dict, out_f)
-        test_result_list.append(test_result)
-        ### ###
-    # Use the halo analysis wrapper function in the halo_analysis module to analyze each halo.
-    #halo_analysis.analyze_halo(BH_parameters)
-    t_e_analysis = time.time()
-    print("####### Subhalo analysis finished! #######", flush=True, file=out_f)
-    utilities.print_time_taken(t_s_analysis, t_e_analysis, "#######", True, out_f)
+    # Check the user input in the parameter file to see whether the subhalo analysis step needs to be done or not.
+    do_subhalo_analysis = BH_parameters['do_subhalo_analysis']
+    if do_subhalo_analysis == 1:
+        t_s_analysis = time.time()
+        print("####### do_subhalo_analysis == 1: computing subhalo properties using tracked particles #######", flush=True, file=out_f)
+        for sim_num in sim_nums:
+            subhalo_analysis_wrapper_function(BH_parameters, sim_num, snapnum_info_dict, out_f)
+        t_e_analysis = time.time()
+        print("####### Subhalo analysis finished! #######", flush=True, file=out_f)
+        utilities.print_time_taken(t_s_analysis, t_e_analysis, "#######", True, out_f)
+        #
+    elif do_subhalo_analysis == 0:
+        print("####### do_subhalo_analysis == 0: skip this step! #######", flush=True, file=out_f)
+        print("", flush=True, file=out_f)
     #
     #
     # Print the total execution time and close the output statement file.
@@ -795,7 +1057,6 @@ def main():
     print(f"########## Total execution time: {t_e - t_s:.03f} s ##########", flush=True, file=out_f)
     #
     out_f.close()
-    return(test_result_list)
 #
 if __name__ == "__main__":
     main()
