@@ -887,8 +887,14 @@ def find_first_infall_from_tree(halo_tree_df, host_scale_arr, host_radius_arr):
     sub_dist_arr = halo_tree_df['distance.from.host.ckpc'].values[::-1]
     #
     # Find indices to slice the data for the host: idx_2 handles subtrees.
-    idx_1 = np.where(np.isclose(host_scale_arr, sub_scale_arr[0], atol=1e-04))[0][0]
+    idx_1 = np.where(np.isclose(host_scale_arr, sub_scale_arr[0], atol=1e-04))[0]
     idx_2 = np.where(np.isclose(host_scale_arr, sub_scale_arr[-1], atol=1e-04))[0][0]
+    move_idx = 1
+    while len(idx_1) == 0:
+        # If the current tree begins before the first snapshot of the host tree, take the next snapshot, then the next and so on.
+        idx_1 = np.where(np.isclose(host_scale_arr, sub_scale_arr[move_idx], atol=1e-4))[0]
+        move_idx += 1
+    idx_1 = idx_1[0]
     # Host's radii corresponding to the scale factors for the subtree.
     host_radius_slice = host_radius_arr[idx_1:idx_2+1]
     # Compare subhalo's distance to host's rvir and find first infall.

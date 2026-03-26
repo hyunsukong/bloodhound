@@ -231,6 +231,17 @@ class SnapshotData(dict):
 ####################################################################################
 # Functions
 ####################################################################################
+def create_directories(BH_parameters):
+    '''
+    * This function creates directories Bloodhound needs.
+    - Directory names will be read in from the parameter file, bloodhound_parameters.txt.
+    '''
+    for param_key, param_value in BH_parameters.items():
+        if param_key.endswith("_dir"):
+            dir_path = pathlib.Path(param_value)
+            # Create the directory.
+            dir_path.mkdir(parents=True, exist_ok=True)
+#
 def open_halo_particles_file(file_name):
     '''
     * Function to open halo particle files.

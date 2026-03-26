@@ -25,7 +25,7 @@ G = 4.30091e-6 # (km/s)^2 * kpc/Msolar
 part_mass = 24697.1 # 1.9693723*1e-06*1e10/h, M_solar
 #
 ## Directory/file paths/simulation numbers ##
-base_dir = '/scratch/05097/hk9457/FIREII/m12c_r7100'
+base_dir = '/scratch/09273/hk9457/FIREII/m12c_r7100'
 snapnum_info_fname = f'{base_dir}/snapshot_redshift_scale-factor.txt'
 out_statement_dir = f'{base_dir}/bloodhound_subhalo_tracking/bloodhound_jobs'
 bloodhound_out_statement_fname_base = "bloodhound_result"

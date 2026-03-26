@@ -44,6 +44,7 @@ def BH_initialization(parameter_fname, header_statement):
     '''
     * This function handles some of the initialization processes for Bloodhound.
     - Reads in the parameter file.
+    - Create all directories Bloodhound needs.
     - Open an output statement file.
     - Write the header for the output statement file: description and date/time.
     - Set two global variables COSMO and T0:
@@ -63,6 +64,9 @@ def BH_initialization(parameter_fname, header_statement):
     #
     # Read in Bloodhound parameters.
     BH_parameters = utilities.read_parameters(parameter_fname)
+    #
+    # Create various directories.
+    utilities.create_directories(BH_parameters)
     #
     # Open an output statement file.
     text_fdir = BH_parameters["out_statement_dir"]
